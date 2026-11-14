@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b0d0c">
+<title>Talk Spot Prompter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: a black stage with the script in an adjustable column and a green reading line
+   at a fixed height. Controls float above the stage and fade out while you're rolling. */
+:root {
+  --bg: #0b0d0c;
+  --surface: #141816;
+  --raise: #1d2320;
+  --rule: #2b3330;
+  --text: #f3f5f4;
+  --dim: #8c9692;
+  --go: #46c486;
+  --cue: #f2c14e;
+  --stop: #ff7a6b;
+  --display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --body: "Atkinson Hyperlegible", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --radius: 12px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--body); font-size: 17px; line-height: 1.45; -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--go); outline-offset: 2px; }
+[hidden] { display: none !important; }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; letter-spacing: 0.01em; margin: 0; text-wrap: balance; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--rule); background: var(--raise); font-weight: 700; font-size: 16px; white-space: nowrap; }
+.btn:hover { border-color: #3b4541; }
+.btn.primary { background: var(--go); border-color: var(--go); color: #06110b; }
+.btn.danger { color: var(--stop); }
+.btn.ghost { background: transparent; }
+.btn.small { min-height: 36px; padding: 0 12px; font-size: 15px; }
+.btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+.btn svg { width: 18px; height: 18px; fill: currentColor; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--rule); color: var(--dim); font-size: 14px; }
+.chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+.chip.ok .dot { background: var(--go); }
+.chip.warn .dot { background: var(--cue); }
+.chip.bad .dot { background: var(--stop); }
+
+/* ---------- Library ---------- */
+.page { max-width: 980px; margin: 0 auto; padding: 24px 20px 64px; display: grid; gap: 22px; }
+.brand { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.brand h1 { font-size: 40px; line-height: 1; }
+.brand h1 span { color: var(--go); }
+.brand p { margin: 0; color: var(--dim); }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.card { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 16px 18px; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); }
+.card h2 { font-size: 26px; line-height: 1.1; }
+.card .meta { color: var(--dim); font-size: 15px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.card .acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.empty { padding: 22px; border: 1px dashed var(--rule); border-radius: var(--radius); color: var(--dim); }
+.help { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.help section { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); padding: 16px 18px; }
+.help h3 { font-size: 20px; margin-bottom: 8px; color: var(--go); }
+.help ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: #cfd6d3; }
+.help code, kbd { font-family: ui-monospace, Menlo, monospace; font-size: 0.9em; background: var(--raise); border: 1px solid var(--rule); border-radius: 5px; padding: 0 5px; color: var(--text); }
+.c-cue { color: var(--cue); }
+.c-go { color: var(--go); }
+.filelabel { position: relative; overflow: hidden; }
+.filelabel input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+/* ---------- Editor ---------- */
+.editor { max-width: 980px; margin: 0 auto; padding: 18px 20px 40px; display: grid; gap: 14px; height: 100%; grid-template-rows: auto auto auto 1fr auto; }
+.editor input[type=text] { width: 100%; min-height: 48px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--rule); background: var(--surface); font-family: var(--display); font-size: 26px; font-weight: 600; }
+.editor textarea { width: 100%; min-height: 320px; height: 100%; resize: none; padding: 14px 16px; border-radius: 10px; border: 1px solid var(--rule); background: var(--surface); font-size: 18px; line-height: 1.55; }
+.editor .meta { color: var(--dim); font-size: 15px; font-variant-numeric: tabular-nums; }
+.spacer { flex: 1; }
+
+/* ---------- Prompter ---------- */
+#v-prompter { position: fixed; inset: 0; background: #000; overflow: hidden; }
+#stage { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; scrollbar-width: none; overscroll-behavior: contain; }
+#stage::-webkit-scrollbar { display: none; }
+#track { position: relative; margin: 0 auto; font-family: var(--body); font-weight: 700; color: var(--text); }
+#track.mirror { transform: scaleX(-1); }
+#track .tl { margin: 0; }
+#track .w { border-radius: 6px; transition: color 0.25s; }
+#track.dimming .w.past { color: #57605c; }
+#track .cue, #track .cue-line { color: var(--cue); font-weight: 400; font-style: italic; }
+#track .cue { font-size: 0.62em; }
+#track .cue-line { font-size: 0.5em; line-height: 1.3; margin: 0.25em 0; }
+#track.nocues .cue, #track.nocues .cue-line { display: none; }
+#track .star { color: var(--go); font-size: 0.6em; vertical-align: 0.25em; }
+#track .gap { height: 0.55em; }
+#track .sec { font-family: var(--display); font-weight: 600; color: var(--go); font-size: 0.42em; letter-spacing: 0.08em; text-transform: uppercase; margin: 0.9em 0 0.2em; padding-top: 0.4em; border-top: 2px solid #1f3a2c; }
+#readline { position: absolute; left: 0; right: 0; height: 0; pointer-events: none; }
+#readline::before, #readline::after { content: ""; position: absolute; top: -14px; border: 14px solid transparent; }
+#readline::before { left: 0; border-left: 18px solid var(--go); }
+#readline::after { right: 0; border-right: 18px solid var(--go); }
+#readline .band { position: absolute; left: 0; right: 0; top: -0.5px; border-top: 1px dashed rgba(70,196,134,0.28); }
+
+.bar { position: absolute; left: 0; right: 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 12px; transition: opacity 0.35s; }
+#topbar { top: 0; background: linear-gradient(#000 0%, rgba(0,0,0,0.88) 75%, rgba(0,0,0,0)); padding-bottom: 22px; }
+#bottombar { bottom: 0; background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0.9) 40%); padding-top: 26px; font-size: 15px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.quiet .bar { opacity: 0; pointer-events: none; }
+#p-title { font-family: var(--display); font-size: 22px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1 1 140px; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+.seg button { min-height: 44px; padding: 0 14px; background: var(--surface); border: 0; border-right: 1px solid var(--rule); font-weight: 700; color: var(--dim); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--raise); color: var(--text); box-shadow: inset 0 -3px 0 var(--go); }
+.wpm { display: inline-flex; align-items: center; gap: 4px; }
+.wpm output { min-width: 74px; text-align: center; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+#progress { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: #16201b; }
+#progress i { display: block; height: 100%; width: 0; background: var(--go); }
+#status { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font-weight: 700; }
+#status .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--dim); }
+#status.live .dot { background: var(--stop); animation: pulse 1.4s infinite; }
+#status.roll .dot { background: var(--go); }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+#heard { flex: 1 1 200px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; direction: rtl; text-align: left; font-style: italic; }
+#heard bdi { direction: ltr; }
+#clock { white-space: nowrap; }
+
+.sheet { position: absolute; top: 68px; right: 12px; width: min(420px, calc(100% - 24px)); max-height: calc(100% - 140px); overflow: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); padding: 16px; display: grid; gap: 14px; box-shadow: 0 18px 50px rgba(0,0,0,0.6); z-index: 5; }
+.sheet h3 { font-size: 22px; display: flex; justify-content: space-between; align-items: center; }
+.field { display: grid; gap: 6px; }
+.field label { display: flex; justify-content: space-between; font-weight: 700; }
+.field label output { color: var(--go); font-variant-numeric: tabular-nums; }
+.field input[type=range] { width: 100%; accent-color: var(--go); min-height: 32px; }
+.field select { min-height: 42px; border-radius: 8px; background: var(--raise); border: 1px solid var(--rule); padding: 0 10px; }
+.field .hint { color: var(--dim); font-size: 14px; }
+.toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; font-weight: 700; }
+.toggle input { width: 22px; height: 22px; accent-color: var(--go); }
+.sections { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.sections button { width: 100%; text-align: left; min-height: 44px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--rule); background: var(--raise); font-weight: 700; }
+.sections button.here { border-color: var(--go); }
+
+#countdown { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--display); font-size: 34vh; font-weight: 700; color: var(--go); background: rgba(0,0,0,0.55); pointer-events: none; z-index: 6; }
+#resume { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 7; font-size: 22px; min-height: 64px; padding: 0 28px; }
+.notice { position: absolute; left: 50%; transform: translateX(-50%); top: 76px; z-index: 8; max-width: min(560px, calc(100% - 24px)); background: var(--raise); border: 1px solid var(--rule); border-left: 4px solid var(--cue); border-radius: 10px; padding: 12px 14px; font-size: 16px; line-height: 1.4; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+.notice.bad { border-left-color: var(--stop); }
+
+#toast { position: fixed; left: 50%; bottom: 72px; transform: translateX(-50%); background: var(--raise); border: 1px solid var(--rule); border-radius: 10px; padding: 10px 16px; z-index: 50; font-weight: 700; max-width: calc(100% - 32px); }
+.modal-wrap { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: grid; place-items: center; z-index: 60; padding: 16px; }
+.modal { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); padding: 20px; max-width: 420px; width: 100%; display: grid; gap: 14px; }
+.modal h3 { font-size: 24px; }
+.modal .row { justify-content: flex-end; }
+
+@media (max-width: 600px) {
+  .brand h1 { font-size: 32px; }
+  .card { grid-template-columns: 1fr; }
+  .card .acts { justify-content: flex-start; }
+  .seg button { padding: 0 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- ========== Library ========== -->
+<main id="v-library" class="page" aria-labelledby="lib-h">
+  <div class="brand">
+    <h1 id="lib-h">Talk Spot <span>Prompter</span></h1>
+    <p>A teleprompter that follows the words you say.</p>
+  </div>
+  <div class="row" id="lib-status"></div>
+  <div class="row">
+    <button class="btn primary" id="btn-new" type="button">New script</button>
+    <label class="btn filelabel" for="file-import">Import .txt<input id="file-import" type="file" accept=".txt,.md,text/plain" multiple></label>
+  </div>
+  <ul class="cards" id="script-list" aria-label="Your scripts"></ul>
+  <div class="help">
+    <section>
+      <h3>Writing a script</h3>
+      <ul>
+        <li><code>===== Section =====</code> makes a section you can jump to.</li>
+        <li>A blank line starts a new take.</li>
+        <li><span class="c-cue">[Cues in brackets]</span> show in yellow and are never waited on.</li>
+        <li><span class="c-go">★</span> marks a line you want to cut into a Short.</li>
+        <li>Write numbers the way you'll say them.</li>
+      </ul>
+    </section>
+    <section>
+      <h3>Filming with it</h3>
+      <ul>
+        <li><b>Voice</b> follows your words. Ramble all you like: it waits until you're back on the script.</li>
+        <li>Tap any line to jump back to it for a retake.</li>
+        <li><b>Auto</b> scrolls at a steady speed. <b>Manual</b> moves only when you tell it.</li>
+        <li>Put the iPad right under the camera lens and keep the reading line near the top.</li>
+      </ul>
+    </section>
+    <section>
+      <h3>Keyboard or clicker</h3>
+      <ul>
+        <li><kbd>Space</kbd> start or stop listening, or play and pause</li>
+        <li><kbd>↓</kbd> <kbd>↑</kbd> next or previous line</li>
+        <li><kbd>→</kbd> <kbd>←</kbd> or <kbd>Page Down</kbd> <kbd>Page Up</kbd> next or previous take</li>
+        <li><kbd>+</kbd> <kbd>−</kbd> scroll speed, <kbd>M</kbd> mirror, <kbd>Esc</kbd> back to scripts</li>
+      </ul>
+    </section>
+  </div>
+</main>
+
+<!-- ========== Editor ========== -->
+<section id="v-editor" class="editor" hidden aria-label="Edit script">
+  <div class="row">
+    <button class="btn ghost small" id="ed-back" type="button">‹ Scripts</button>
+    <span class="spacer"></span>
+    <span class="meta" id="ed-meta"></span>
+  </div>
+  <label for="ed-title" class="meta">Title</label>
+  <input type="text" id="ed-title" autocomplete="off" placeholder="Script title">
+  <textarea id="ed-text" spellcheck="true" aria-label="Script text" placeholder="Paste or type your script here."></textarea>
+  <div class="row">
+    <button class="btn small" type="button" data-insert="section">+ Section</button>
+    <button class="btn small" type="button" data-insert="cue">+ [Cue]</button>
+    <button class="btn small" type="button" data-insert="star">+ ★</button>
+    <span class="spacer"></span>
+    <button class="btn small danger" id="ed-delete" type="button">Delete</button>
+    <button class="btn small" id="ed-export" type="button">Download .txt</button>
+    <button class="btn small" id="ed-save" type="button">Save</button>
+    <button class="btn small primary" id="ed-open" type="button">Save and open</button>
+  </div>
+</section>
+
+<!-- ========== Prompter ========== -->
+<section id="v-prompter" hidden aria-label="Teleprompter">
+  <div id="stage"><div id="track"></div></div>
+  <div id="readline"><div class="band"></div></div>
+
+  <div class="bar" id="topbar">
+    <button class="btn small" id="p-back" type="button" aria-label="Back to scripts">‹ Scripts</button>
+    <div id="p-title"></div>
+    <div class="seg" role="group" aria-label="Scroll mode">
+      <button type="button" data-mode="voice" aria-pressed="false">Voice</button>
+      <button type="button" data-mode="auto" aria-pressed="false">Auto</button>
+      <button type="button" data-mode="manual" aria-pressed="false">Manual</button>
+    </div>
+    <div class="wpm" id="wpm-box">
+      <button class="btn small" id="wpm-down" type="button" aria-label="Slower">−</button>
+      <output id="wpm-out">140 wpm</output>
+      <button class="btn small" id="wpm-up" type="button" aria-label="Faster">+</button>
+    </div>
+    <button class="btn primary" id="p-go" type="button">Listen</button>
+    <button class="btn small" id="p-sections" type="button">Sections</button>
+    <button class="btn small" id="p-settings" type="button">Settings</button>
+    <button class="btn small" id="p-full" type="button" aria-label="Full screen">Full screen</button>
+  </div>
+
+  <div class="bar" id="bottombar">
+    <span id="status"><span class="dot"></span><span id="status-text">Ready</span></span>
+    <span id="heard"><bdi id="heard-text"></bdi></span>
+    <span id="clock">0:00</span>
+    <div id="progress"><i></i></div>
+  </div>
+
+  <div class="sheet" id="sheet-sections" hidden>
+    <h3>Sections <button class="btn small ghost" type="button" data-close>Close</button></h3>
+    <ul class="sections" id="sections-list"></ul>
+  </div>
+  <div class="sheet" id="sheet-settings" hidden>
+    <h3>Settings <button class="btn small ghost" type="button" data-close>Close</button></h3>
+    <div id="settings-body" style="display:grid;gap:14px"></div>
+  </div>
+
+  <div id="countdown" hidden></div>
+  <button class="btn primary" id="resume" type="button" hidden>Tap to keep listening</button>
+  <div class="notice" id="notice" hidden></div>
+</section>
+
+<div id="toast" role="status" aria-live="polite" hidden></div>
+<div class="modal-wrap" id="modal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-h">
+    <h3 id="modal-h"></h3>
+    <p id="modal-p" style="margin:0;color:var(--dim)"></p>
+    <div class="row"><button class="btn" id="modal-no" type="button">Cancel</button><button class="btn primary" id="modal-yes" type="button">OK</button></div>
+  </div>
+</div>
+
+<script>
+/* ---- core: tokenizing, parsing and voice matching (pure, no DOM) ---- */
+const TP = (() => {
+  const ONES = ['zero','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];
+  const TENS = ['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+  const STOP = new Set('a an and the to of i it is in on my me you your that this for at so but with its im be was are if do just not no or as by from up out we he she they them there here what'.split(' '));
+
+  function intWords(n) {
+    if (n < 20) return [ONES[n]];
+    if (n < 100) { const o = n % 10; return o ? [TENS[Math.floor(n / 10)], ONES[o]] : [TENS[Math.floor(n / 10)]]; }
+    if (n < 1000) { const r = n % 100; return [ONES[Math.floor(n / 100)], 'hundred', ...(r ? intWords(r) : [])]; }
+    for (const [v, name] of [[1e9, 'billion'], [1e6, 'million'], [1e3, 'thousand']]) {
+      if (n >= v) { const r = n % v; return [...intWords(Math.floor(n / v)), name, ...(r ? intWords(r) : [])]; }
+    }
+    return [String(n)];
+  }
+  function numberWords(s) {
+    s = s.replace(/,/g, '');
+    const [i, f] = s.split('.');
+    const n = parseInt(i, 10);
+    if (!isFinite(n)) return [];
+    let out = n < 1e12 ? intWords(n) : [i];
+    if (f) out = [...out, 'point', ...f.split('').map(d => ONES[+d])];
+    return out;
+  }
+  /* Normalize any text (script or speech) into comparable words. Digits become words,
+     so "$250" from speech lines up with "two hundred fifty dollars" in the script. */
+  function tokens(text) {
+    const out = [];
+    const t = String(text).replace(/[’‘`]/g, "'").replace(/[★☆*]/g, ' ')
+      .replace(/(\d)([a-zA-Z])/g, '$1 $2').replace(/([a-zA-Z])(\d)/g, '$1 $2');
+    for (const raw of t.split(/[\s\-–—\/]+/)) {
+      if (!raw) continue;
+      const m = raw.match(/\d[\d,]*(?:\.\d+)?/);
+      if (m) {
+        out.push(...numberWords(m[0]));
+        if (raw.includes('%')) out.push('percent');
+        if (raw.includes('$')) out.push('dollars');
+        continue;
+      }
+      const w = raw.toLowerCase().replace(/'/g, '').replace(/[^a-z]/g, '');
+      if (w) out.push(w);
+    }
+    return out;
+  }
+
+  /* Script format: "===== Title =====" is a section, a line in [brackets] is a cue,
+     a blank line starts a new take, inline [..] is a cue that isn't read, a star marks a Shorts line. */
+  function parse(text) {
+    const lines = [], toks = [], sections = [], blocks = [];
+    let pendingBreak = true;
+    for (const raw of String(text || '').replace(/\r\n?/g, '\n').split('\n')) {
+      const t = raw.trim();
+      if (!t) { lines.push({ type: 'gap' }); pendingBreak = true; continue; }
+      const sm = t.match(/^={2,}\s*(.*?)\s*={2,}$/);
+      if (sm) {
+        lines.push({ type: 'section', text: sm[1] });
+        sections.push({ title: sm[1], line: lines.length - 1, tok: toks.length });
+        pendingBreak = true; continue;
+      }
+      if (/^\[[^\]]*\]$/.test(t)) { lines.push({ type: 'cue', text: t.slice(1, -1) }); continue; }
+      const line = { type: 'text', segs: [], first: toks.length, n: 0, text: t };
+      const re = /\[[^\]]*\]|★|[^\s\[★]+/g; let mm;
+      while ((mm = re.exec(t))) {
+        const s = mm[0];
+        if (s[0] === '[') line.segs.push({ k: 'cue', s });
+        else if (s === '★') line.segs.push({ k: 'star' });
+        else {
+          const tk = tokens(s);
+          line.segs.push({ k: 'w', s, i: toks.length, n: tk.length });
+          for (const w of tk) toks.push({ w, line: lines.length });
+        }
+      }
+      line.n = toks.length - line.first;
+      if (pendingBreak && line.n > 0) { blocks.push(line.first); pendingBreak = false; }
+      lines.push(line);
+    }
+    const lineStarts = lines.filter(l => l.type === 'text' && l.n > 0).map(l => l.first);
+    return { lines, toks, norm: toks.map(t => t.w), sections, blocks, lineStarts };
+  }
+
+  function lev(a, b, max) {
+    if (Math.abs(a.length - b.length) > max) return max + 1;
+    let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+    for (let i = 1; i <= a.length; i++) {
+      const cur = [i]; let rowMin = i;
+      for (let j = 1; j <= b.length; j++) {
+        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+        if (cur[j] < rowMin) rowMin = cur[j];
+      }
+      if (rowMin > max) return max + 1;
+      prev = cur;
+    }
+    return prev[b.length];
+  }
+  const eqCache = new Map();
+  function eq(a, b) {
+    if (a === b) return true;
+    const la = a.length, lb = b.length, mn = Math.min(la, lb);
+    if (mn < 3 || Math.abs(la - lb) > 2) return false;
+    const key = a < b ? a + '|' + b : b + '|' + a;
+    let v = eqCache.get(key);
+    if (v === undefined) {
+      if (mn >= 4 && (a.startsWith(b) || b.startsWith(a))) v = true;
+      else if (mn >= 5) v = lev(a, b, 2) <= (mn >= 7 ? 2 : 1);
+      else v = false;
+      if (eqCache.size > 20000) eqCache.clear();
+      eqCache.set(key, v);
+    }
+    return v;
+  }
+  const wt = w => STOP.has(w) ? 0.35 : (w.length <= 3 ? 0.7 : 1);
+
+  /* Follows the speaker through the script. cur = index of the last script word heard.
+     It only moves on real evidence, so ad-libs leave it waiting; a strong match a little
+     behind (a retake) moves it back. */
+  class Tracker {
+    constructor(norm) { this.S = norm; this.N = norm.length; this.cur = -1; this.heard = []; this.partial = []; }
+    setPos(cur) { this.cur = Math.max(-1, Math.min(this.N - 1, cur)); this.heard = []; this.partial = []; }
+    final(text) {
+      this.heard.push(...tokens(text));
+      if (this.heard.length > 32) this.heard = this.heard.slice(-32);
+      this.partial = [];
+      return this._run(true);
+    }
+    partialText(text) { this.partial = tokens(text); return this._run(false); }
+    /* The recent end of everything heard since the last jump; the browser keeps growing it. */
+    hear(text) { this.heard = []; this.partial = tokens(text); return this._run(false); }
+    _run(allowGlobal) {
+      const tail = [...this.heard, ...this.partial].slice(-8);
+      const j = this.match(tail, allowGlobal);
+      if (j != null && j !== this.cur) { this.cur = j; return j; }
+      return null;
+    }
+    /* Local alignment ending exactly at script word j: matched words add their weight,
+       skipped script words and extra heard words cost a little, so a lone common word
+       far ahead of where you are can't drag the prompter forward. */
+    score(tail, j) {
+      const S = this.S, T = tail.length;
+      let ak = -1;
+      for (let k = T - 1; k >= Math.max(0, T - 3); k--) if (eq(tail[k], S[j])) { ak = k; break; }
+      if (ak < 0) return 0;
+      const lo = Math.max(0, j - (ak + 4)), m = ak, n = j - lo;
+      const GS = 0.4, GT = 0.25, MM = 0.3;
+      let prev = new Float32Array(n + 1), cur = new Float32Array(n + 1);
+      for (let b = 0; b <= n; b++) prev[b] = 0;
+      for (let a = 1; a <= m; a++) {
+        cur[0] = 0;
+        for (let b = 1; b <= n; b++) {
+          const w = S[lo + b - 1];
+          let v = prev[b - 1] + (eq(tail[a - 1], w) ? wt(w) : -MM);
+          const up = prev[b] - GT, left = cur[b - 1] - GS;
+          if (up > v) v = up; if (left > v) v = left; if (v < 0) v = 0;
+          cur[b] = v;
+        }
+        const t = prev; prev = cur; cur = t;
+      }
+      const lead = m ? prev[n] : 0;
+      return lead + wt(S[j]) + (ak === T - 1 ? 0.25 : -0.15 * (T - 1 - ak));
+    }
+    match(tail, allowGlobal) {
+      const T = tail.length; if (!T || !this.N) return null;
+      const cur = this.cur, N = this.N;
+      let best = null, bestAdj = -Infinity;
+      const from = Math.max(0, cur - 40), to = Math.min(N - 1, cur + 60);
+      for (let j = from; j <= to; j++) {
+        const s = this.score(tail, j); if (s <= 0) continue;
+        const d = j - cur; let adj;
+        if (d >= 0) adj = s - 0.012 * Math.max(0, d - 6);
+        else { if (s < 3.2) continue; adj = s - 0.6; }
+        if (adj > bestAdj + 1e-6 || (Math.abs(adj - bestAdj) <= 1e-6 && Math.abs(d) < Math.abs(best - cur))) { bestAdj = adj; best = j; }
+      }
+      if (best != null) {
+        if (T <= 2) {
+          if (best > cur && best - cur <= 5 && !STOP.has(this.S[best]) && this.S[best].length >= 3 && bestAdj >= 0.95) return best;
+        } else if (bestAdj >= 1.7) return best;
+      }
+      if (allowGlobal && T >= 5) {
+        let g = null, gs = 0, second = 0;
+        for (let j = 0; j < N; j++) {
+          if (j >= from && j <= to) continue;
+          const s = this.score(tail, j);
+          if (s > gs) { second = gs; gs = s; g = j; } else if (s > second) second = s;
+        }
+        if (g != null && gs >= 4.5 && second < gs * 0.75) return g;
+      }
+      return null;
+    }
+  }
+  return { tokens, parse, Tracker, numberWords };
+})();
+if (typeof module !== 'undefined') module.exports = TP;
+
+</script>
+<script>
+(() => {
+'use strict';
+const BUILTIN_VIDEO1 = "===== VIDEO 1 · TRICEP ATTACHMENTS =====\n[★ = Shorts line. Say the whole block in one go, then hold two seconds.]\n[Before you film the talk spot, tap Edit and type your weigh-in numbers over the blanks.]\n\n===== 1 · COLD OPEN =====\n[AT THE SPEEDIANCE · RIGHT AFTER THE LAST REP]\n\n★ Okay. That felt great.\n[BEAT]\nIt also cost two hundred fifty dollars.\n\n[HOLD UP THE ROPE]\n★ This one came free with my cable machine,\nand you can buy one just like it for thirteen bucks.\nSo is it nineteen ropes great?\nLet's find out.\n\n\n===== 2 · PROMISE AND DISCLOSURE =====\n[TALK SPOT]\n\nQuick backstory.\nAs a novice lifter, the internet convinced me\nI needed a better way to do a tricep pushdown.\nA movement I was already doing.\nJust fine.\n\nSo I watched hours of reviews,\nadded the Black Widow to my cart\nand took it back out for weeks,\nthen bought it at midnight.\nLike a normal, well-adjusted person.\n\nAnd now I'm one of those people on the internet.\nCircle of life.\n[STARE INTO THE LENS]\n\nThree attachments:\ngood, better, best,\nat least by price tag.\nThe rope that came with my Speediance.\nHonestly, they're all pretty much the same rope,\nand you can grab one for about thirteen bucks.\nRogue's Rotating V-Grip,\nabout a hundred and twenty-five dollars after shipping and tax.\nAnd the Force 6 Black Widow,\ntwo hundred fifty dollars,\nshipped free, tax included.\n\nEverything you see in this video, I paid for.\nIncluding the Speediance, two years ago.\nNo sponsors, no affiliate links.\n\nSame weight, same reps,\nand every one gets a score.\n\n\n===== 3 · FIRST IMPRESSIONS AND WEIGH-IN =====\n\nWeigh-in first.\nRope: [ROPE LB] pounds.\nRogue: Rogue says three and a half pounds,\nmy scale says [ROGUE LB].\nBlack Widow: [WIDOW LB].\n\nWhen I first opened the Black Widow, I thought:\nthis is massive,\nthis is heavy,\nand there is no way this is worth two hundred fifty dollars.\nHold that thought.\n\nHandles:\nthe Rogue is thirty-two millimeters,\nthe Black Widow is thirty-five.\nMy calipers say [ROGUE MM] and [WIDOW MM].\n\nThe Rogue doesn't come with a carabiner.\nI didn't notice,\nbecause I was busy noticing the Force 6 carabiner.\nThat thing is weapon-grade sharp.\n\n\n===== 4 · FEEL =====\n\nUsual reminder:\nthis is my score,\nfor my needs,\nat today's price.\n\nThe rope.\nIt's slippery.\nForever.\nWhen you're the only one using it in a home gym,\nbreaking it in takes years.\n\nAnd once I start adding weight,\nthose rubber ends dig into the edges of my palms\nand my knuckles.\n\n★ The Rogue.\nPushdowns feel good,\nand the rotation lets your wrists find their own angle.\nBut the thirty-two millimeter handles feel thin next to the Black Widow,\nand the flanges are good,\njust not as comfortable.\n\n★ The Black Widow.\nThose big flared Dead Blow ends\nare the most comfortable thing I've ever used,\nperiod.\nI only use it rotating,\nbut having the lock is a nice bit of mental reassurance.\nAnd all that weight I complained about?\nI don't notice it during a set.\n\nDoes a V-bar fix my form?\nIt's better with either one.\nBut Jeff Nippard won't be citing my videos for his cues\nanytime soon.\n\nIf the rope's ends bug you too,\neither V-bar fixes that.\nIf you just want something that works and costs nothing,\nthe rope does the job.\n\n\n===== 5 · BUILD =====\n\nRope: mine's held up like new.\nBut it's nylon and rubber,\nnot machined aluminum.\n\n[PICK UP THE ROGUE]\nRogue: made in the USA,\nwith a tiny bit of play at the pivot.\nHere's mine.\n[WIGGLE THE HUB]\n\n★ Story time.\nThis was my first Rogue piece.\nAfter all the hype about Rogue knurling,\nmine showed up with good knurling on one handle\nand noticeably more passive knurling on the other.\n\n★ So I gave it to a friend.\nIt's only allowed back in my gym for filming.\nIt knows what it did.\n\nTo be fair,\nmade in America means made by people.\nIt isn't going to be polished to perfection,\nand the build is great for the price.\nIf a little wiggle bothers you,\nyou might be shopping for gym decor.\nAsk me how I know.\n\n★ Black Widow:\nbillet aluminum,\nblack anodized,\nstainless magnetic pin.\nIt's perfect.\nEvery nick on mine is my fault.\nMy one wish?\nMore colors.\n\n\n===== 6 · USABILITY =====\n\nUsability is easy.\nAll three clip on and off exactly the same,\nand the rope is the easiest to store.\n\nThe Black Widow loses a point for that carabiner,\nwhich I'm pretty sure is legally a weapon.\n\n\n===== 7 · VERSATILITY =====\n\nPushdowns, overhead extensions, curls:\nboth V-bars handle all three.\n\nFace pulls?\nThe rope wins, easily.\n\n★ Other reviewers say rotating V-grips are secretly great for rows.\nI tried it.\nFor me, there are better options.\n\nBut honestly, I don't use these for rows.\nI have a dedicated row attachment.\nI have a dedicated attachment for everything.\n\nThe rope does the most,\nthe Black Widow's lock gives it the edge over the Rogue,\nso the rope and the Black Widow tie here.\n\n\n===== 8 · VALUE =====\n\n★ Real price math.\nRope: free with my Speediance,\nabout thirteen dollars if you buy one.\nRogue: ninety-five dollars on the tag,\nalmost a hundred and twenty-five by the time shipping and tax were done with me.\nBlack Widow: two hundred fifty dollars,\nshipped free, tax included.\n\n★ So the Black Widow costs about nineteen ropes.\nThe Rogue costs about ten.\n\nWhatever you end up buying,\nlook for an influencer promo code first.\nI don't have one,\nso go use somebody else's.\n\nAttachments are small and hard to break,\nso used ones are worth a look too.\n\nThe rope is a perfect ten on value.\nAnd for most people,\nthe Rogue makes more sense than the Black Widow.\n\n\n===== 9 · WHO IT'S FOR =====\n\n[HOLD UP THE ROPE]\nRope: buy it if you're on a budget\nor you love face pulls.\nOdds are one already came with your machine.\nThe downside:\nit's slippery,\nand it digs into your hands as the weight goes up.\n\n[HOLD UP THE ROGUE]\nRogue: buy it if you want the best V-bar for the money.\nThe downside:\nthe knurl on mine was uneven,\nthe handles are thinner,\nand it can't lock.\n\n[HOLD UP THE BLACK WIDOW]\nBlack Widow:\nif you're after the best,\naccept no substitutes.\nThe downside:\nit's two hundred fifty dollars,\nit's heavy,\nblack is your only color,\nand the carabiner might draw blood.\n\n[SET IT DOWN · SLOW DOWN]\nHere's my honest take.\nI'm in the gym because I want to live a healthier life,\nnot because I like working out.\nI actually kind of hate working out.\nBut sometimes you do things you don't like.\n\nThe Black Widow makes me happier when I use it,\nand that's worth two hundred fifty dollars to me.\nIt might not be worth anything to you,\nand that's fine.\nIf you're showing up even on the days you don't want to,\nyou're already doing the hard part.\n\n\n===== 10 · SCORE REVEAL =====\n\n★ The rope.\nThe math says seven,\nbut the math likes the rope more than my hands do.\nSo it's a six and a half.\nBuy it if you're on a budget or love face pulls.\n\n★ The Rogue:\nseven and a half.\nBuy it if you want the best V-bar for the money.\n\n★ The Black Widow.\nRemember when I said there's no way this is worth two hundred fifty dollars?\nI was right.\nBut it is markedly better.\nNine out of ten.\nBuy it if you want the best.\n\n★ I give you the score.\nYou make the call.\nRemember, I'm the guy who bought all three.\n\n\n===== 11 · OUTRO =====\n\nIf you'd like to support my gym obsession,\na like or a subscribe helps way more.\nAnd unlike a new attachment,\nit won't cost you anything.\n\nTell me what's next.\nWant to see more of the Speediance Gym Monster\nI've been testing all of these on?\nI bought it with my own money two years ago.\nOr would you rather see my favorite row attachments?\nLet me know in the comments.\n\n[SIGN-OFF MARK]\nAnd hey, all progress is progress.\nKeep showing up,\nand I'll see you next time.\n\n===== END =====\n";
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } },
+  del(k) { try { localStorage.removeItem(k); } catch (e) {} }
+};
+const fmtTime = s => { s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+const uid = () => 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+/* ---------- settings ---------- */
+const DEFAULTS = {
+  size: Math.round(clamp(Math.min(innerWidth, 1400) / 14, 36, 100)),
+  lh: 1.3, width: 92, readline: 28, wpm: 140,
+  mirror: false, countdown: true, stopTakes: false, cues: true, dim: true, heard: true,
+  lang: (navigator.language || 'en-US'), listen: 'continuous'
+};
+const settings = Object.assign({}, DEFAULTS, LS.get('tsp.settings', {}));
+const saveSettings = () => LS.set('tsp.settings', settings);
+
+/* ---------- scripts (stored in this browser) ---------- */
+let scripts = LS.get('tsp.scripts', []);
+if (!Array.isArray(scripts)) scripts = [];
+if (!LS.get('tsp.seeded', false)) {
+  if (!scripts.some(s => s.id === 'video-1')) scripts.unshift({ id: 'video-1', title: 'Video 1: Tricep attachments', text: BUILTIN_VIDEO1, updatedAt: Date.now() });
+  LS.set('tsp.seeded', true);
+}
+let storageOk = LS.set('tsp.scripts', scripts);
+const persist = () => { storageOk = LS.set('tsp.scripts', scripts); if (!storageOk) toast("Couldn't save in this browser. Use Download .txt to keep a copy."); };
+const findScript = id => scripts.find(s => s.id === id);
+const wordCount = text => TP.parse(text).toks.length;
+
+/* ---------- small UI helpers ---------- */
+let toastTimer = 0;
+function toast(msg, ms = 2600) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, ms); }
+function ask(title, body, yes = 'OK') {
+  return new Promise(res => {
+    $('#modal-h').textContent = title; $('#modal-p').textContent = body; $('#modal-yes').textContent = yes;
+    const m = $('#modal'); m.hidden = false; $('#modal-yes').focus();
+    const done = v => { m.hidden = true; $('#modal-yes').onclick = $('#modal-no').onclick = null; res(v); };
+    $('#modal-yes').onclick = () => done(true); $('#modal-no').onclick = () => done(false);
+  });
+}
+function show(view) {
+  for (const v of ['library', 'editor', 'prompter']) $('#v-' + v).hidden = v !== view;
+  state.view = view;
+  if (view !== 'prompter') leavePrompter();
+}
+function download(name, text) {
+  try {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+    a.download = (name || 'script').replace(/[^\w\- .]+/g, '').trim() + '.txt';
+    document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  } catch (e) { toast("This browser wouldn't download the file."); }
+}
+
+const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+const isApple = /iPad|iPhone|Macintosh/.test(navigator.userAgent);
+const isIPad = /iPad/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const otherIOSBrowser = /CriOS|FxiOS|EdgiOS|OPiOS/.test(navigator.userAgent);
+const standalone = (window.navigator.standalone === true) || matchMedia('(display-mode: standalone)').matches;
+
+/* ---------- library ---------- */
+function renderLibrary() {
+  const st = $('#lib-status'); st.innerHTML = '';
+  const chip = (cls, text) => { const c = el('span', 'chip ' + cls); c.append(el('span', 'dot'), document.createTextNode(text)); st.append(c); };
+  if (otherIOSBrowser) chip('bad', 'Voice tracking only works in Safari on iPad. Open this page in Safari.');
+  else if (!Rec) chip('bad', isApple ? 'Voice tracking needs Safari. Open this page in Safari.' : 'This browser has no speech recognition. Use Safari on iPad or Chrome on a computer.');
+  else if (standalone) chip('warn', 'Voice tracking may not work from the Home Screen. Open it in a Safari tab.');
+  else chip('ok', 'Voice tracking available in this browser');
+  chip(storageOk ? 'ok' : 'warn', storageOk ? 'Scripts are saved on this device' : "Scripts can't be saved in this browser");
+
+  const list = $('#script-list'); list.innerHTML = '';
+  const sorted = scripts.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  if (!sorted.length) {
+    const li = el('li', 'empty'); li.textContent = 'No scripts yet. Tap New script, paste your script, and save it.'; list.append(li); return;
+  }
+  for (const s of sorted) {
+    const p = TP.parse(s.text); const n = p.toks.length;
+    const li = el('li', 'card');
+    const info = el('div');
+    info.append(el('h2', null, s.title || 'Untitled'));
+    const secs = p.sections.filter(x => x.tok < n).length;
+    info.append(el('div', 'meta', `${n.toLocaleString()} words · about ${Math.max(1, Math.round(n / settings.wpm))} min at ${settings.wpm} wpm${secs ? ` · ${secs} sections` : ''} · edited ${new Date(s.updatedAt || Date.now()).toLocaleDateString()}`));
+    const acts = el('div', 'acts');
+    const ed = el('button', 'btn', 'Edit'); ed.type = 'button'; ed.onclick = () => openEditor(s.id);
+    const go = el('button', 'btn primary', 'Open prompter'); go.type = 'button'; go.onclick = () => openPrompter(s.id);
+    acts.append(ed, go);
+    li.append(info, acts); list.append(li);
+  }
+}
+$('#btn-new').onclick = () => { const s = { id: uid(), title: 'New script', text: '', updatedAt: Date.now() }; scripts.push(s); persist(); openEditor(s.id, true); };
+$('#file-import').onchange = async e => {
+  const files = Array.from(e.target.files || []); let last = null;
+  for (const f of files) {
+    try { const text = await f.text(); const s = { id: uid(), title: f.name.replace(/\.[^.]+$/, ''), text, updatedAt: Date.now() }; scripts.push(s); last = s; }
+    catch (err) { toast(`Couldn't read ${f.name}.`); }
+  }
+  e.target.value = ''; persist(); renderLibrary();
+  if (last) toast(files.length > 1 ? `Imported ${files.length} scripts.` : `Imported "${last.title}".`);
+};
+
+/* ---------- editor ---------- */
+let edId = null, edDirty = false;
+function openEditor(id, isNew) {
+  const s = findScript(id); if (!s) return;
+  edId = id; edDirty = false;
+  $('#ed-title').value = s.title; $('#ed-text').value = s.text;
+  show('editor'); updateEdMeta();
+  (isNew ? $('#ed-title') : $('#ed-text')).focus();
+}
+function updateEdMeta() {
+  const n = wordCount($('#ed-text').value);
+  $('#ed-meta').textContent = `${n.toLocaleString()} words · about ${Math.max(1, Math.round(n / settings.wpm))} min at ${settings.wpm} wpm${edDirty ? ' · unsaved changes' : ''}`;
+}
+function saveEditor() {
+  const s = findScript(edId); if (!s) return false;
+  s.title = $('#ed-title').value.trim() || 'Untitled'; s.text = $('#ed-text').value; s.updatedAt = Date.now();
+  persist(); edDirty = false; updateEdMeta(); return true;
+}
+$('#ed-title').oninput = $('#ed-text').oninput = () => { edDirty = true; updateEdMeta(); };
+$('#ed-save').onclick = () => { if (saveEditor()) toast('Saved.'); };
+$('#ed-open').onclick = () => { if (saveEditor()) openPrompter(edId); };
+$('#ed-export').onclick = () => download($('#ed-title').value, $('#ed-text').value);
+$('#ed-back').onclick = async () => {
+  if (edDirty && await ask('Save your changes?', 'You edited this script since it was last saved.', 'Save')) saveEditor();
+  renderLibrary(); show('library');
+};
+$('#ed-delete').onclick = async () => {
+  const s = findScript(edId); if (!s) return;
+  if (!await ask('Delete this script?', `"${s.title}" will be removed from this device.`, 'Delete')) return;
+  scripts = scripts.filter(x => x.id !== edId); LS.del('tsp.pos.' + edId); persist(); renderLibrary(); show('library');
+};
+$$('[data-insert]').forEach(b => b.onclick = () => {
+  const ta = $('#ed-text'); const kind = b.dataset.insert;
+  const snip = kind === 'section' ? '\n===== New section =====\n' : kind === 'cue' ? '[CUE] ' : '★ ';
+  const a = ta.selectionStart, z = ta.selectionEnd;
+  ta.value = ta.value.slice(0, a) + snip + ta.value.slice(z);
+  const sel = kind === 'section' ? [a + 7, a + 18] : kind === 'cue' ? [a + 1, a + 4] : [a + 2, a + 2];
+  ta.focus(); ta.setSelectionRange(sel[0], sel[1]); edDirty = true; updateEdMeta();
+});
+
+/* ---------- prompter state ---------- */
+const state = {
+  view: 'library', script: null, P: null, N: 0, pos: 0, mode: 'voice',
+  playing: false, listening: false, elapsed: 0, countdownEnd: 0,
+  touching: false, userScroll: false, lastUserScroll: 0, lastShown: 0
+};
+const G = { top: null, idx: null, cnt: null, LH: 60, R: 200 };
+let spans = [], tracker = null, dimUpTo = 0, raf = 0, lastFrame = 0, posSaveTimer = 0;
+const stage = $('#stage'), track = $('#track');
+
+function openPrompter(id) {
+  const s = findScript(id); if (!s) return;
+  state.script = s; state.P = TP.parse(s.text); state.N = state.P.toks.length;
+  tracker = new TP.Tracker(state.P.norm);
+  $('#p-title').textContent = s.title;
+  state.mode = LS.get('tsp.mode', Rec ? 'voice' : 'auto');
+  if (state.mode === 'voice' && !Rec) state.mode = 'auto';
+  state.playing = false; state.elapsed = 0;
+  show('prompter');
+  renderTrack(); applySettings();
+  const saved = LS.get('tsp.pos.' + id, 0);
+  jumpTo(clamp(saved, 0, Math.max(0, state.N - 1)), { instant: true, quiet: true });
+  if (saved > 0) toast('Picked up where you left off. Sections › Top starts over.');
+  setMode(state.mode);
+  closeSheets(); hideNotice(); showBars();
+  keepAwake(true);
+  cancelAnimationFrame(raf); lastFrame = performance.now(); raf = requestAnimationFrame(frame);
+}
+function leavePrompter() {
+  if (!state.script) return;
+  stopListening(); pause();
+  savePos(); cancelAnimationFrame(raf); keepAwake(false);
+  if (document.fullscreenElement || document.webkitFullscreenElement) { try { (document.exitFullscreen || document.webkitExitFullscreen).call(document); } catch (e) {} }
+  state.script = null;
+}
+$('#p-back').onclick = () => { renderLibrary(); show('library'); };
+
+/* ---------- rendering and geometry ---------- */
+function renderTrack() {
+  const P = state.P; track.innerHTML = ''; spans = new Array(state.N); dimUpTo = 0;
+  const frag = document.createDocumentFragment();
+  P.lines.forEach((ln, li) => {
+    if (ln.type === 'gap') { frag.append(el('div', 'gap')); return; }
+    if (ln.type === 'section') { const d = el('div', 'sec', ln.text); frag.append(d); return; }
+    if (ln.type === 'cue') { frag.append(el('div', 'cue-line', '[' + ln.text + ']')); return; }
+    const d = el('div', 'tl'); d.dataset.first = ln.first; d.dataset.n = ln.n;
+    ln.segs.forEach((sg, k) => {
+      if (k) d.append(' ');
+      if (sg.k === 'cue') d.append(el('span', 'cue', sg.s));
+      else if (sg.k === 'star') d.append(el('span', 'star', '★'));
+      else { const sp = el('span', 'w', sg.s); for (let q = 0; q < sg.n; q++) spans[sg.i + q] = sp; d.append(sp); }
+    });
+    frag.append(d);
+  });
+  if (!state.N) { const d = el('div', 'cue-line', '[This script is empty. Go back and tap Edit to add some words.]'); frag.append(d); }
+  track.append(frag);
+}
+function measure() {
+  const H = stage.clientHeight || innerHeight;
+  G.R = H * settings.readline / 100;
+  track.style.paddingTop = Math.round(G.R) + 'px';
+  track.style.paddingBottom = Math.round(H) + 'px';
+  const N = state.N; G.top = new Float64Array(N); G.idx = new Int32Array(N); G.cnt = new Int32Array(N);
+  for (let i = 0; i < N; i++) G.top[i] = spans[i] ? spans[i].offsetTop : (i ? G.top[i - 1] : 0);
+  let i = 0;
+  while (i < N) { let j = i; while (j + 1 < N && Math.abs(G.top[j + 1] - G.top[i]) < 3) j++; for (let k = i; k <= j; k++) { G.idx[k] = k - i; G.cnt[k] = j - i + 1; } i = j + 1; }
+  G.LH = parseFloat(getComputedStyle(track).lineHeight) || settings.size * settings.lh;
+  $('#readline').style.top = G.R + 'px';
+}
+function yAt(p) {
+  const N = state.N; if (!N) return 0;
+  if (p <= 0) return G.top[0];
+  if (p >= N) return G.top[N - 1] + G.LH;
+  const i = Math.floor(p), f = p - i;
+  return G.top[i] + G.LH * ((G.idx[i] + f) / G.cnt[i]);
+}
+function targetScroll() { return yAt(state.pos) + G.LH / 2 - G.R; }
+function posFromScroll() {
+  const N = state.N; if (!N) return 0;
+  const y = stage.scrollTop + G.R - G.LH / 2;
+  let lo = 0, hi = N - 1;
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (G.top[m] <= y) lo = m; else hi = m - 1; }
+  const start = lo - G.idx[lo];
+  const f = clamp((y - G.top[lo]) / G.LH, 0, 0.999);
+  return clamp(start + f * G.cnt[lo], 0, N);
+}
+function applySettings() {
+  track.style.fontSize = settings.size + 'px';
+  track.style.lineHeight = settings.lh;
+  track.style.width = settings.width + '%';
+  track.classList.toggle('mirror', !!settings.mirror);
+  track.classList.toggle('nocues', !settings.cues);
+  track.classList.toggle('dimming', !!settings.dim && state.mode === 'voice');
+  $('#wpm-out').textContent = settings.wpm + ' wpm';
+  $('#heard').hidden = !settings.heard;
+  measure(); stage.scrollTop = targetScroll();
+}
+addEventListener('resize', () => { if (state.view === 'prompter') { measure(); stage.scrollTop = targetScroll(); } });
+
+function updateDim() {
+  const upTo = Math.floor(state.pos);
+  if (upTo === dimUpTo) return;
+  if (upTo > dimUpTo) { for (let i = dimUpTo; i < upTo && i < state.N; i++) spans[i] && spans[i].classList.add('past'); }
+  else { for (let i = upTo; i < dimUpTo && i < state.N; i++) spans[i] && spans[i].classList.remove('past'); }
+  dimUpTo = upTo;
+}
+function savePos() { if (state.script) LS.set('tsp.pos.' + state.script.id, Math.floor(state.pos)); }
+
+/* ---------- moving around ---------- */
+function jumpTo(p, opts = {}) {
+  state.pos = clamp(p, 0, state.N);
+  if (tracker) tracker.setPos(Math.floor(state.pos) - 1);
+  ear.cut = (ear.full || '').length;
+  updateDim();
+  if (opts.instant) stage.scrollTop = targetScroll();
+  clearTimeout(posSaveTimer); posSaveTimer = setTimeout(savePos, 800);
+}
+function curStart(list) { const p = Math.floor(state.pos); let k = -1; for (let i = 0; i < list.length; i++) if (list[i] <= p) k = i; return k; }
+function step(list, dir) {
+  if (!list.length) return;
+  const k = curStart(list);
+  if (dir > 0) jumpTo(k + 1 < list.length ? list[k + 1] : state.N);
+  else {
+    const here = k >= 0 ? list[k] : 0;
+    if (k >= 0 && state.pos - here > 1.5) jumpTo(here); else jumpTo(k > 0 ? list[k - 1] : 0);
+  }
+  showBars();
+}
+const nextLine = () => step(state.P.lineStarts, 1), prevLine = () => step(state.P.lineStarts, -1);
+const nextTake = () => step(state.P.blocks, 1), prevTake = () => step(state.P.blocks, -1);
+
+/* ---------- modes ---------- */
+function setMode(m) {
+  if (m === 'voice' && !Rec) { notice(isApple ? 'Voice tracking only works in Safari itself. Open this page in a Safari tab, not from the Home Screen or another app.' : "This browser can't do speech recognition. On iPad use Safari; on a computer use Chrome or Safari.", true); m = 'auto'; }
+  if (m !== state.mode) { stopListening(); pause(); }
+  state.mode = m; LS.set('tsp.mode', m);
+  $$('.seg [data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
+  $('#wpm-box').hidden = m !== 'auto';
+  track.classList.toggle('dimming', !!settings.dim && m === 'voice');
+  if (m === 'voice') tracker && tracker.setPos(Math.floor(state.pos) - 1);
+  refreshGo();
+}
+$$('.seg [data-mode]').forEach(b => b.onclick = () => { setMode(b.dataset.mode); showBars(); });
+function refreshGo() {
+  const go = $('#p-go'), st = $('#status');
+  st.classList.remove('live', 'roll');
+  if (state.mode === 'voice') {
+    go.textContent = state.listening ? 'Stop listening' : 'Listen'; go.hidden = false;
+    if (state.listening) st.classList.add('live');
+    $('#status-text').textContent = state.listening ? 'Listening' : 'Not listening';
+  } else if (state.mode === 'auto') {
+    go.textContent = state.playing ? 'Pause' : 'Play'; go.hidden = false;
+    if (state.playing) st.classList.add('roll');
+    $('#status-text').textContent = state.playing ? `Rolling at ${settings.wpm} wpm` : 'Paused';
+  } else {
+    go.hidden = true; $('#status-text').textContent = 'Manual: tap a line, swipe, or use the arrow keys';
+  }
+  if (!(state.mode === 'voice' && state.listening)) $('#heard-text').textContent = '';
+}
+function primary() {
+  if (state.mode === 'voice') { if (!$('#resume').hidden) resumeListening(); else if (state.listening) stopListening(); else startListening(); }
+  else if (state.mode === 'auto') { state.playing ? pause() : play(); }
+  else { setMode('auto'); play(); }
+}
+$('#p-go').onclick = () => { primary(); showBars(); };
+
+function play() {
+  if (state.pos >= state.N - 0.01) jumpTo(0, { instant: true });
+  state.playing = true;
+  state.countdownEnd = settings.countdown ? performance.now() + 3000 : 0;
+  hideNotice(); refreshGo(); showBars();
+}
+function pause() { state.playing = false; state.countdownEnd = 0; $('#countdown').hidden = true; refreshGo(); savePos(); }
+function setWpm(v) { settings.wpm = clamp(Math.round(v / 5) * 5, 60, 260); saveSettings(); $('#wpm-out').textContent = settings.wpm + ' wpm'; refreshGo(); }
+$('#wpm-down').onclick = () => setWpm(settings.wpm - 10);
+$('#wpm-up').onclick = () => setWpm(settings.wpm + 10);
+
+/* ---------- listening (Safari / Chrome speech recognition) ---------- */
+const ear = { rec: null, want: false, started: 0, ok: false, fails: 0, lastResult: 0, restarts: [], full: '', cut: 0 };
+function startListening() {
+  if (!Rec) { setMode('voice'); return; }
+  hideNotice(); $('#resume').hidden = true;
+  tracker.setPos(Math.floor(state.pos) - 1);
+  ear.want = true; ear.fails = 0; ear.restarts = [];
+  spawnRec();
+  state.listening = true; refreshGo(); showBars();
+}
+function stopListening() {
+  ear.want = false; $('#resume').hidden = true;
+  if (ear.rec) { try { ear.rec.onend = null; ear.rec.abort(); } catch (e) {} ear.rec = null; }
+  if (state.listening) { state.listening = false; refreshGo(); savePos(); }
+}
+function spawnRec() {
+  let rec;
+  try { rec = new Rec(); } catch (e) { notice("Speech recognition couldn't start in this browser.", true); stopListening(); return; }
+  ear.rec = rec; ear.ok = false; ear.full = ''; ear.cut = 0;
+  rec.lang = settings.lang || 'en-US';
+  rec.interimResults = true;
+  rec.continuous = settings.listen !== 'bursts';
+  rec.maxAlternatives = 1;
+  rec.onstart = () => { ear.started = performance.now(); rec._started = true; };
+  setTimeout(() => { if (ear.want && ear.rec === rec && !rec._started) { $('#resume').hidden = false; showBars(); } }, 3000);
+  rec.onresult = e => {
+    ear.ok = true; ear.fails = 0; ear.lastResult = performance.now();
+    // Everything heard in this listening session; words from before your last jump are skipped.
+    let full = '';
+    for (let i = 0; i < e.results.length; i++) { const r = e.results[i]; full += (r[0] ? r[0].transcript : '') + ' '; }
+    ear.full = full;
+    let txt = full.slice(Math.min(ear.cut, full.length));
+    if (txt.length > 360) txt = txt.slice(-360).replace(/^\S*\s/, '');
+    const moved = tracker.hear(txt);
+    if (moved != null) { state.pos = tracker.cur + 1; updateDim(); clearTimeout(posSaveTimer); posSaveTimer = setTimeout(savePos, 1500); }
+    if (settings.heard) { const h = txt.trim().split(/\s+/).slice(-14).join(' '); $('#heard-text').textContent = h; }
+  };
+  rec.onerror = e => {
+    const code = e.error || 'error';
+    if (code === 'no-speech' || code === 'aborted') return;
+    if (code === 'not-allowed' || code === 'service-not-allowed') {
+      if (ear.ok) { ear.needsTap = true; return; }   // worked before: likely needs a fresh tap to restart
+      ear.want = false; state.listening = false; refreshGo();
+      notice(isIPad || isApple
+        ? "Speech recognition isn't available yet. Check three things: you're in Safari (not Chrome or another app), the microphone is allowed for this site (Settings › Apps › Safari › Microphone, or allow it when Safari asks), and Siri or Dictation is turned on (Settings › General › Keyboard › Dictation). Then tap Listen again."
+        : 'The browser blocked the microphone. Allow microphone access for this site, then tap Listen again.', true);
+      return;
+    }
+    if (code === 'network') { notice('Speech recognition needs an internet connection right now. Check Wi-Fi, then tap Listen.', true); return; }
+    if (code === 'language-not-supported') { notice(`Speech recognition doesn't support "${settings.lang}". Change the language in Settings.`, true); ear.want = false; return; }
+  };
+  rec.onend = () => {
+    if (ear.rec !== rec) return;
+    if (!ear.want) { state.listening = false; refreshGo(); return; }
+    const now = performance.now();
+    ear.restarts = ear.restarts.filter(t => now - t < 10000); ear.restarts.push(now);
+    if (ear.needsTap || ear.restarts.length > 8) {      // the browser wants a fresh tap before it listens again
+      ear.needsTap = false; $('#resume').hidden = false; showBars();
+      $('#status-text').textContent = 'Paused listening'; $('#status').classList.remove('live');
+      return;
+    }
+    setTimeout(() => { if (ear.want && ear.rec === rec) spawnRec(); }, ear.restarts.length > 3 ? 600 : 80);
+  };
+  try { rec.start(); }
+  catch (e) { ear.needsTap = false; $('#resume').hidden = false; }
+}
+function resumeListening() {
+  $('#resume').hidden = true; ear.restarts = [];
+  if (ear.rec) { try { ear.rec.onend = null; ear.rec.abort(); } catch (e) {} ear.rec = null; }
+  if (!ear.want) { startListening(); return; }
+  spawnRec(); state.listening = true; refreshGo();
+}
+$('#resume').onclick = resumeListening;
+
+/* ---------- notices ---------- */
+let noticeTimer = 0;
+function notice(msg, bad) { const n = $('#notice'); n.textContent = msg; n.classList.toggle('bad', !!bad); n.hidden = false; clearTimeout(noticeTimer); noticeTimer = setTimeout(hideNotice, 14000); }
+function hideNotice() { $('#notice').hidden = true; }
+$('#notice').onclick = hideNotice;
+
+/* ---------- frame loop ---------- */
+function frame(now) {
+  raf = requestAnimationFrame(frame);
+  const dt = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now;
+  if (state.view !== 'prompter') return;
+  const cd = $('#countdown');
+  if (state.playing && state.countdownEnd) {
+    const left = state.countdownEnd - now;
+    if (left > 0) { cd.hidden = false; cd.textContent = String(Math.ceil(left / 1000)); }
+    else { state.countdownEnd = 0; cd.hidden = true; }
+  }
+  const rolling = state.mode === 'auto' && state.playing && !state.countdownEnd;
+  if (rolling) {
+    const before = state.pos;
+    state.pos = Math.min(state.N, state.pos + settings.wpm / 60 * dt);
+    if (settings.stopTakes) {
+      const b = state.P.blocks.find(x => x > before && x <= state.pos);
+      if (b != null) { state.pos = b; pause(); toast('End of take. Press Play for the next one.'); }
+    }
+    if (state.pos >= state.N) { pause(); toast('End of script.'); }
+  }
+  if (rolling || (state.mode === 'voice' && state.listening)) state.elapsed += dt;
+
+  // scrolling: follow the target unless the person is dragging the text
+  if (state.userScroll && !state.touching && now - state.lastUserScroll > 380) {
+    state.userScroll = false;
+    const p = posFromScroll(); state.pos = p; if (tracker) tracker.setPos(Math.floor(p) - 1); ear.cut = (ear.full || '').length; updateDim(); savePos();
+  }
+  if (!state.userScroll && !state.touching) {
+    const target = targetScroll(), cur = stage.scrollTop, diff = target - cur;
+    if (rolling) stage.scrollTop = target;
+    else if (Math.abs(diff) > 0.5) stage.scrollTop = cur + diff * (1 - Math.exp(-dt * 7));
+  }
+
+  // auto-hide the bars while rolling or listening
+  const busy = rolling || (state.mode === 'voice' && state.listening);
+  const quiet = busy && now - state.lastShown > 3500 && $('#sheet-settings').hidden && $('#sheet-sections').hidden && $('#resume').hidden;
+  $('#v-prompter').classList.toggle('quiet', quiet);
+
+  if (!frame.t || now - frame.t > 250) {
+    frame.t = now;
+    const N = state.N || 1;
+    $('#progress i').style.width = (100 * state.pos / N).toFixed(2) + '%';
+    const left = (state.N - state.pos) / settings.wpm * 60;
+    $('#clock').textContent = `${fmtTime(state.elapsed)} · about ${fmtTime(left)} left`;
+  }
+}
+function showBars() { state.lastShown = performance.now(); $('#v-prompter').classList.remove('quiet'); }
+
+/* ---------- touch, taps and scrolling ---------- */
+let down = null;
+stage.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY, t: performance.now(), type: e.pointerType }; if (e.pointerType !== 'touch') state.touching = true; });
+const endTouch = () => { if (down && down.type !== 'touch') state.touching = false; };
+stage.addEventListener('pointerup', e => {
+  endTouch();
+  if (!down) return;
+  const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y); down = null;
+  if (moved > 12 || state.userScroll) return;
+  const wasQuiet = $('#v-prompter').classList.contains('quiet');
+  showBars(); closeSheets();
+  if (state.mode === 'auto' && state.playing) { pause(); return; }
+  if (wasQuiet && state.mode !== 'voice') return;
+  const line = e.target.closest && e.target.closest('.tl');
+  if (line && +line.dataset.n > 0) { jumpTo(+line.dataset.first); if (state.mode === 'voice') $('#heard-text').textContent = ''; }
+});
+stage.addEventListener('pointercancel', endTouch);
+let lastTouchEnd = 0, lastWheel = 0;
+stage.addEventListener('touchstart', () => { state.touching = true; }, { passive: true });
+stage.addEventListener('touchend', () => { state.touching = false; lastTouchEnd = performance.now(); }, { passive: true });
+stage.addEventListener('touchcancel', () => { state.touching = false; lastTouchEnd = performance.now(); }, { passive: true });
+stage.addEventListener('wheel', () => { lastWheel = performance.now(); state.userScroll = true; state.lastUserScroll = lastWheel; if (state.mode === 'auto' && state.playing) pause(); showBars(); }, { passive: true });
+stage.addEventListener('scroll', () => {
+  const now = performance.now();
+  if (state.touching || state.userScroll || now - lastWheel < 200) {
+    if (!state.userScroll && state.mode === 'auto' && state.playing) pause();
+    state.userScroll = true; state.lastUserScroll = now; showBars();
+  }
+}, { passive: true });
+
+/* ---------- keyboard and clickers ---------- */
+document.addEventListener('keydown', e => {
+  if (state.view !== 'prompter') { if (e.key === 'Escape' && !$('#modal').hidden) $('#modal-no').click(); return; }
+  if (e.target.closest && e.target.closest('input, select, textarea')) return;
+  const k = e.key; let used = true;
+  if (document.activeElement && document.activeElement.tagName === 'BUTTON') document.activeElement.blur();
+  if (k === ' ' || k === 'Enter' || k === 'k' || k === 'K' || k === 'MediaPlayPause') primary();
+  else if (k === 'ArrowDown' || k === 'j') nextLine();
+  else if (k === 'ArrowUp') prevLine();
+  else if (k === 'ArrowRight' || k === 'PageDown') nextTake();
+  else if (k === 'ArrowLeft' || k === 'PageUp') prevTake();
+  else if (k === '+' || k === '=') setWpm(settings.wpm + 10);
+  else if (k === '-' || k === '_') setWpm(settings.wpm - 10);
+  else if (k === 'Home') { jumpTo(0); }
+  else if (k === 'End') { jumpTo(state.N); }
+  else if (k === 'm' || k === 'M') { settings.mirror = !settings.mirror; saveSettings(); applySettings(); }
+  else if (k === 'f' || k === 'F') toggleFull();
+  else if (k === 'Escape') { if (!$('#sheet-settings').hidden || !$('#sheet-sections').hidden) closeSheets(); else { renderLibrary(); show('library'); } }
+  else used = false;
+  if (used) { e.preventDefault(); showBars(); }
+});
+
+/* ---------- sheets ---------- */
+function closeSheets() { $('#sheet-settings').hidden = true; $('#sheet-sections').hidden = true; }
+$$('[data-close]').forEach(b => b.onclick = closeSheets);
+$('#p-sections').onclick = () => {
+  const open = $('#sheet-sections').hidden; closeSheets(); if (!open) return;
+  const ul = $('#sections-list'); ul.innerHTML = '';
+  const add = (label, tok, here) => { const li = el('li'); const b = el('button', here ? 'here' : '', label); b.type = 'button'; b.onclick = () => { jumpTo(tok); closeSheets(); }; li.append(b); ul.append(li); };
+  add('Top of script', 0, false);
+  const secs = state.P.sections.filter(s => s.tok < state.N);
+  const p = Math.floor(state.pos); let cur = -1; secs.forEach((s, i) => { if (s.tok <= p) cur = i; });
+  secs.forEach((s, i) => add(s.title, s.tok, i === cur));
+  $('#sheet-sections').hidden = false; showBars();
+};
+const SETTINGS_UI = [
+  { k: 'size', label: 'Text size', min: 24, max: 160, step: 2, fmt: v => v + ' px' },
+  { k: 'lh', label: 'Line spacing', min: 1.05, max: 1.9, step: 0.05, fmt: v => (+v).toFixed(2) },
+  { k: 'width', label: 'Column width', min: 40, max: 100, step: 2, fmt: v => v + '%' },
+  { k: 'readline', label: 'Reading line height', min: 10, max: 60, step: 1, fmt: v => v + '% from top', hint: 'Keep it near the top when the iPad sits just under the lens.' },
+  { k: 'wpm', label: 'Auto scroll speed', min: 60, max: 260, step: 5, fmt: v => v + ' wpm' },
+  { k: 'mirror', label: 'Mirror text (for a beam-splitter glass)', type: 'bool' },
+  { k: 'countdown', label: 'Count down 3 seconds before Auto starts', type: 'bool' },
+  { k: 'stopTakes', label: 'Auto stops at the end of each take', type: 'bool' },
+  { k: 'cues', label: 'Show [cues]', type: 'bool' },
+  { k: 'dim', label: 'Dim words you have already said', type: 'bool' },
+  { k: 'heard', label: 'Show what it hears', type: 'bool' },
+  { k: 'lang', label: 'Speech language', type: 'select', options: [['en-US', 'English (US)'], ['en-GB', 'English (UK)'], ['en-CA', 'English (Canada)'], ['en-AU', 'English (Australia)'], ['es-US', 'Spanish (US)'], ['es-MX', 'Spanish (Mexico)']] },
+  { k: 'listen', label: 'Listening style', type: 'select', options: [['continuous', 'Continuous (default)'], ['bursts', 'Short bursts (try this if it stops following you)']] }
+];
+$('#p-settings').onclick = () => {
+  const open = $('#sheet-settings').hidden; closeSheets(); if (!open) return;
+  const body = $('#settings-body'); body.innerHTML = '';
+  for (const f of SETTINGS_UI) {
+    const id = 'set-' + f.k;
+    if (f.type === 'bool') {
+      const row = el('label', 'toggle'); row.htmlFor = id; row.append(document.createTextNode(f.label));
+      const cb = el('input'); cb.type = 'checkbox'; cb.id = id; cb.checked = !!settings[f.k];
+      cb.onchange = () => { settings[f.k] = cb.checked; saveSettings(); applySettings(); refreshGo(); };
+      row.append(cb); body.append(row); continue;
+    }
+    const wrap = el('div', 'field'); const lab = el('label'); lab.htmlFor = id;
+    lab.append(document.createTextNode(f.label));
+    if (f.type === 'select') {
+      const sel = el('select'); sel.id = id;
+      const opts = f.options.slice(); if (!opts.some(o => o[0] === settings[f.k])) opts.unshift([settings[f.k], settings[f.k]]);
+      for (const [v, t] of opts) { const o = el('option', null, t); o.value = v; if (v === settings[f.k]) o.selected = true; sel.append(o); }
+      sel.onchange = () => { settings[f.k] = sel.value; saveSettings(); if (state.listening) { stopListening(); toast('Changed. Tap Listen to start again.'); } };
+      wrap.append(lab, sel);
+    } else {
+      const out = el('output', null, f.fmt(settings[f.k])); lab.append(out);
+      const r = el('input'); r.type = 'range'; r.id = id; r.min = f.min; r.max = f.max; r.step = f.step; r.value = settings[f.k];
+      r.oninput = () => { settings[f.k] = +r.value; out.textContent = f.fmt(r.value); saveSettings(); applySettings(); refreshGo(); };
+      wrap.append(lab, r);
+    }
+    if (f.hint) wrap.append(el('div', 'hint', f.hint));
+    body.append(wrap);
+  }
+  $('#sheet-settings').hidden = false; showBars();
+};
+
+/* ---------- full screen and keeping the screen awake ---------- */
+function toggleFull() {
+  const d = document, r = d.documentElement;
+  try {
+    if (d.fullscreenElement || d.webkitFullscreenElement) (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+    else { const req = r.requestFullscreen || r.webkitRequestFullscreen; const p = req && req.call(r); if (p && p.catch) p.catch(() => toast('Full screen isn’t available here.')); }
+  } catch (e) { toast('Full screen isn’t available here.'); }
+}
+$('#p-full').onclick = toggleFull;
+if (!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen)) $('#p-full').hidden = true;
+let wake = null, wakeWanted = false, wakeWarned = false;
+async function keepAwake(on) {
+  wakeWanted = on;
+  try {
+    if (on && 'wakeLock' in navigator) { if (!wake) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } }
+    else if (!on && wake) { await wake.release(); wake = null; }
+    else if (on && !wakeWarned) { wakeWarned = true; toast('Tip: set Auto-Lock to Never so the screen stays on during long takes.', 5000); }
+  } catch (e) { if (on && !wakeWarned) { wakeWarned = true; toast('Tip: set Auto-Lock to Never so the screen stays on during long takes.', 5000); } }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && wakeWanted) keepAwake(true);
+  if (document.visibilityState === 'hidden') { savePos(); if (state.listening) { stopListening(); } }
+});
+
+/* ---------- start ---------- */
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (state.view === 'prompter') { measure(); stage.scrollTop = targetScroll(); } });
+renderLibrary();
+window.__tsp = { state, settings, scripts: () => scripts, openPrompter, nextTake, nextLine, jumpTo };
+})();
+</script>
+</body>
+</html>
